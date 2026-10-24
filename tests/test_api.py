@@ -1,4 +1,3 @@
-import base64
 import json
 import unittest
 
@@ -165,64 +164,47 @@ class UnexpectedErrorTests(AppTestCase):
 class PublicDemoApiTests(AppTestCase):
     config_overrides = {
         "public_demo": True,
-        "demo_username": "judge",
-        "demo_password": "safearena-demo-password-123",
         "allowed_hosts": ("demo.example",),
     }
 
-    def _headers(self, credentials=None):
-        headers = {"Host": "demo.example"}
-        if credentials is not None:
-            token = base64.b64encode(credentials.encode("utf-8")).decode("ascii")
-            headers["Authorization"] = f"Basic {token}"
-        return headers
+    def _headers(self):
+        return {"Host": "demo.example"}
 
-    def _post(self, path, body=None, credentials=None):
-        return self.client.post(path, json=body or {}, headers=self._headers(credentials))
+    def _get(self, path):
+        return self.client.get(path, headers=self._headers())
 
-    def test_all_routes_require_auth_except_health(self):
-        for path in ("/", "/static/app.js", "/api/status", "/api/policy", "/api/audit", "/api/audit/export"):
-            response = self.client.get(path, headers=self._headers())
-            self.assertEqual(response.status_code, 401, path)
-            self.assertIn('Basic realm="SafeArena Demo"', response.headers.get("WWW-Authenticate", ""))
-        self.assertEqual(self.client.get("/api/health", headers=self._headers()).status_code, 200)
-        self.assertEqual(self._post("/api/demo/blue-llm").status_code, 401)
+    def _post(self, path, body=None):
+        return self.client.post(path, json=body or {}, headers=self._headers())
 
-    def test_valid_basic_auth_enables_dashboard_and_mock_gateway(self):
-        credentials = "judge:safearena-demo-password-123"
-        self.assertEqual(self.client.get("/", headers=self._headers(credentials)).status_code, 200)
-        status = self.client.get("/api/status", headers=self._headers(credentials)).get_json()
+    def test_dashboard_and_api_are_open_without_authentication(self):
+        for path in ("/", "/static/app.js", "/api/status", "/api/policy", "/api/audit", "/api/health"):
+            response = self._get(path)
+            self.assertEqual(response.status_code, 200, path)
+            self.assertNotIn("WWW-Authenticate", response.headers)
+        self.assertEqual(self._post("/api/demo/blue-llm").status_code, 200)
+
+    def test_public_demo_forces_local_mock_and_open_gateway(self):
+        status = self._get("/api/status").get_json()
         self.assertTrue(status["public_demo"])
         self.assertEqual(status["mode"], "local")
         self.assertEqual(status["llm"]["provider"], "mock")
         response = self._post("/api/gateway", {
             "source": "red", "target": "llm", "payload": "hello"
-        }, credentials)
+        })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["decision"], "ALLOWED")
 
-    def test_wrong_basic_auth_is_rejected(self):
-        response = self.client.get("/", headers=self._headers("judge:wrong-password"))
-        self.assertEqual(response.status_code, 401)
-        self.assertIn("WWW-Authenticate", response.headers)
-
-    def test_sensitive_operations_are_disabled_without_mutating_audit(self):
-        credentials = "judge:safearena-demo-password-123"
+    def test_sensitive_operations_are_disabled_without_authentication(self):
         before = self.ctx.audit.verify()["count"]
         checks = [
-            self._post("/api/audit/tamper-test", credentials=credentials),
-            self._post("/api/audit/rotate", {"confirm": True}, credentials),
-            self._post("/api/isolation/probe", credentials=credentials),
-            self.client.get("/api/audit/export", headers=self._headers(credentials)),
+            self._post("/api/audit/tamper-test"),
+            self._post("/api/audit/rotate", {"confirm": True}),
+            self._post("/api/isolation/probe"),
+            self._get("/api/audit/export"),
         ]
         for response in checks:
             self.assertEqual(response.status_code, 403)
         self.assertEqual(self.ctx.audit.verify()["count"], before)
-
-    def test_failed_authentication_attempts_are_rate_limited(self):
-        codes = [self.client.get("/", headers=self._headers()).status_code for _ in range(11)]
-        self.assertEqual(codes[:10], [401] * 10)
-        self.assertEqual(codes[10], 429)
 
 
 if __name__ == "__main__":

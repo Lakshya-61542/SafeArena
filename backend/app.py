@@ -9,7 +9,6 @@ Security notes
 from __future__ import annotations
 
 import re
-import secrets
 import threading
 import time
 from collections import deque
@@ -74,11 +73,9 @@ def create_app(config: Config | None = None, *, llm_client=None, http=None, tcp=
     sessions = SessionManager()
     gateway = Gateway(policy=policy, audit=audit, events=events, llm=llm, sessions=sessions, mode=config.mode)
     limiter = RateLimiter(config.rate_limit_per_minute)
-    auth_limiter = RateLimiter(10)
     http_for_probe = http
     app.extensions["safearena"] = SimpleNamespace(config=config, audit=audit, events=events, llm=llm, gateway=gateway,
-                                                  sessions=sessions, policy=policy, limiter=limiter,
-                                                  auth_limiter=auth_limiter)
+                                                  sessions=sessions, policy=policy, limiter=limiter)
 
     def start_session(reason: str) -> dict:
         info = sessions.start()
@@ -97,22 +94,7 @@ def create_app(config: Config | None = None, *, llm_client=None, http=None, tcp=
         if host.lower() not in config.allowed_hosts:
             raise ApiError(400, "Host header not allowed")
 
-        # The platform health check is the only unauthenticated public-demo route.
-        if config.public_demo and request.path != "/api/health":
-            auth = request.authorization
-            valid = False
-            if auth is not None and auth.type.lower() == "basic":
-                username_ok = secrets.compare_digest(auth.username or "", config.demo_username)
-                password_ok = secrets.compare_digest(auth.password or "", config.demo_password)
-                valid = username_ok & password_ok
-            if not valid:
-                if not auth_limiter.allow():
-                    return jsonify({"error": "Too many failed authentication attempts; try again later"}), 429
-                response = jsonify({"error": "Authentication required"})
-                response.status_code = 401
-                response.headers["WWW-Authenticate"] = 'Basic realm="SafeArena Demo", charset="UTF-8"'
-                return response
-
+        # Public demo is intentionally open for judges; risky operations remain disabled below.
         if config.public_demo and (request.method, request.path) in {
             ("POST", "/api/audit/tamper-test"),
             ("POST", "/api/audit/rotate"),

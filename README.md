@@ -2,6 +2,12 @@
 
 **Isolate → Control → Detect → Prove**
 
+## Live demo
+
+**Live URL:** _Pending the first Render deployment._
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Lakshya-61542/SafeArena)
+
 SafeArena is a sandbox for testing adversarial prompts against an AI model without letting the attackers and defenders touch each other. A **Red** zone (attack) and a **Blue** zone (defense) can only reach the **Client LLM** through a **Security Gateway**. Every decision becomes a security event and a tamper-evident, SHA-256 hash-chained audit record.
 
 | Step | What it means here |
@@ -151,21 +157,17 @@ The opt-in public demo is for a controlled hackathon presentation, not a product
 
 ### Render setup
 
-A `render.yaml` Blueprint is included. In Render, create a Blueprint from this repository and set the two prompted secrets before exposing the service:
-
-- `SAFEARENA_DEMO_USERNAME`: a demo login name.
-- `SAFEARENA_DEMO_PASSWORD`: a unique random password of at least 16 characters. Do not reuse a personal password.
+A `render.yaml` Blueprint is included. Use the **Deploy to Render** button above or create a Blueprint from this repository. No judge username or password is required. After the first deployment, replace the pending Live URL above with the service's actual `https://<service>.onrender.com` URL.
 
 The Blueprint enables `SAFEARENA_PUBLIC_DEMO=1`, uses Gunicorn, binds to `0.0.0.0`, uses the platform-provided port, and configures `/api/health` as the health check. The app allows only the exact hostname in `SAFEARENA_ALLOWED_HOSTS`; if that variable is not set on Render, it uses Render's exact `RENDER_EXTERNAL_HOSTNAME`. For a custom domain, set `SAFEARENA_ALLOWED_HOSTS` to the exact hostname(s), comma-separated, without `https://`, ports, paths, or wildcards.
 
 ### Public demo protections
 
-- The browser prompts for HTTP Basic Authentication. `/api/health` is the only unauthenticated route; the dashboard, static assets, audit data, and API require credentials.
+- The dashboard, static assets, and API are open to anyone with the URL so judges can enter directly. Do not use the demo for private data or secrets.
 - Public mode forces `SAFEARENA_MODE=local` and `LLM_PROVIDER=mock`; no Gemini key or Docker services are needed.
 - Audit rotation, audit tamper testing, audit export, and network-isolation probes are disabled in public mode at the API layer, and their dashboard controls are hidden.
-- Authentication failures are rate-limited. Use HTTPS only; Render provides HTTPS for its public service URL.
+- POST requests are rate-limited, the exact Render hostname is allow-listed, and the service should be accessed over HTTPS (provided by Render).
 - Demo event and audit files are stored under `/tmp/safearena-data` by default in public mode. This storage is ephemeral and is not a durable evidence archive; a restart or redeploy may reset it.
-- `GET /api/health` is intended only for the hosting platform's health check. Do not add any other unauthenticated routes.
 
 For a manual Render service instead of the Blueprint, use:
 
@@ -175,7 +177,7 @@ For a manual Render service instead of the Blueprint, use:
 
 ## Known limitations
 
-- Local mode has no authentication and is localhost-only. The opt-in public demo requires HTTP Basic Authentication and disables audit rotation, tamper tests, exports, and network probes; expose it only through HTTPS.
+- Local mode has no authentication and is localhost-only. The opt-in public demo is intentionally open to judges and disables audit rotation, tamper tests, exports, and network probes; expose it only through HTTPS.
 - **Zone identity is asserted by the caller.** In this prototype the `source` field is trusted (the dashboard "acts as" a zone). Network segmentation (Docker mode) is the real boundary; production would need per-zone credentials (mTLS or signed tokens).
 - **Local mode is a simulation** of isolation (policy only).
 - **Audit chain limits:** an attacker who can rewrite *both* the log and its checkpoint file consistently is not detected. Production needs an external anchor (HMAC key kept elsewhere, WORM storage, or publishing the head hash).

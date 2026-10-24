@@ -62,8 +62,6 @@ class Config:
     llm_service_url: str = "http://llm-service:8103"
     llm_provider: str = "mock"
     gemini_api_key: str = field(default="", repr=False)
-    demo_username: str = field(default="", repr=False)
-    demo_password: str = field(default="", repr=False)
     public_demo: bool = False
     gemini_model: str = "gemini-2.5-flash"
     gemini_timeout: float = 15.0
@@ -87,18 +85,6 @@ class Config:
         if public_raw not in ("0", "1"):
             raise ValueError("SAFEARENA_PUBLIC_DEMO must be 0 or 1")
         public_demo = public_raw == "1"
-
-        if public_demo:
-            username = env.get("SAFEARENA_DEMO_USERNAME", "").strip()
-            password = env.get("SAFEARENA_DEMO_PASSWORD", "")
-            if not username:
-                raise ValueError("SAFEARENA_DEMO_USERNAME is required in public demo mode")
-            if len(username) > 128:
-                raise ValueError("SAFEARENA_DEMO_USERNAME must be 128 characters or fewer")
-            if len(password) < 16 or not password.strip():
-                raise ValueError("SAFEARENA_DEMO_PASSWORD must be at least 16 characters")
-            if len(password) > 256:
-                raise ValueError("SAFEARENA_DEMO_PASSWORD must be 256 characters or fewer")
 
         mode_raw = env.get("SAFEARENA_MODE", "local").strip().lower() or "local"
         if not public_demo and mode_raw not in VALID_MODES:
@@ -151,8 +137,6 @@ class Config:
             llm_service_url=env.get("LLM_SERVICE_URL", cls.llm_service_url).rstrip("/"),
             llm_provider=provider,
             gemini_api_key=gemini_key,
-            demo_username=username if public_demo else "",
-            demo_password=password if public_demo else "",
             public_demo=public_demo,
             gemini_model=model,
             gemini_timeout=float(timeout),

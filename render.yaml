@@ -9,10 +9,6 @@ services:
     envVars:
       - key: SAFEARENA_PUBLIC_DEMO
         value: "1"
-      - key: SAFEARENA_DEMO_USERNAME
-        sync: false
-      - key: SAFEARENA_DEMO_PASSWORD
-        sync: false
       - key: SAFEARENA_DATA_DIR
         value: /tmp/safearena-data
       - key: SAFEARENA_MODE
