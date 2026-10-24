@@ -1,7 +1,6 @@
 """Runtime configuration, read from environment variables (and an optional .env file).
 
-Secrets (GEMINI_API_KEY) are only ever read here, on the server. They are never
-sent to the browser, never written to the audit log and never put in an error message.
+Secrets are held only in server-side configuration and excluded from repr output.
 """
 from __future__ import annotations
 
@@ -16,6 +15,10 @@ VALID_MODES = ("local", "docker")
 VALID_PROVIDERS = ("mock", "gemini")
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
 _MODEL_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_HOST_RE = re.compile(
+    r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)"
+    r"(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$"
+)
 
 
 def load_dotenv(path: Path, environ: MutableMapping[str, str] | None = None) -> None:
@@ -59,6 +62,9 @@ class Config:
     llm_service_url: str = "http://llm-service:8103"
     llm_provider: str = "mock"
     gemini_api_key: str = field(default="", repr=False)
+    demo_username: str = field(default="", repr=False)
+    demo_password: str = field(default="", repr=False)
+    public_demo: bool = False
     gemini_model: str = "gemini-2.5-flash"
     gemini_timeout: float = 15.0
     allowed_hosts: tuple = ("localhost", "127.0.0.1", "::1")
@@ -77,30 +83,80 @@ class Config:
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "Config":
         env = os.environ if environ is None else environ
-        mode = env.get("SAFEARENA_MODE", "local").strip().lower() or "local"
-        if mode not in VALID_MODES:
-            raise ValueError(f"SAFEARENA_MODE must be one of {VALID_MODES}, got {mode!r}")
-        provider = env.get("LLM_PROVIDER", "mock").strip().lower() or "mock"
-        if provider not in VALID_PROVIDERS:
-            raise ValueError(f"LLM_PROVIDER must be one of {VALID_PROVIDERS}, got {provider!r}")
-        model = env.get("GEMINI_MODEL", "").strip() or cls.gemini_model
+        public_raw = env.get("SAFEARENA_PUBLIC_DEMO", "0").strip()
+        if public_raw not in ("0", "1"):
+            raise ValueError("SAFEARENA_PUBLIC_DEMO must be 0 or 1")
+        public_demo = public_raw == "1"
+
+        if public_demo:
+            username = env.get("SAFEARENA_DEMO_USERNAME", "").strip()
+            password = env.get("SAFEARENA_DEMO_PASSWORD", "")
+            if not username:
+                raise ValueError("SAFEARENA_DEMO_USERNAME is required in public demo mode")
+            if len(username) > 128:
+                raise ValueError("SAFEARENA_DEMO_USERNAME must be 128 characters or fewer")
+            if len(password) < 16 or not password.strip():
+                raise ValueError("SAFEARENA_DEMO_PASSWORD must be at least 16 characters")
+            if len(password) > 256:
+                raise ValueError("SAFEARENA_DEMO_PASSWORD must be 256 characters or fewer")
+
+        mode_raw = env.get("SAFEARENA_MODE", "local").strip().lower() or "local"
+        if not public_demo and mode_raw not in VALID_MODES:
+            raise ValueError(f"SAFEARENA_MODE must be one of {VALID_MODES}, got {mode_raw!r}")
+        mode = "local" if public_demo else mode_raw
+
+        provider_raw = env.get("LLM_PROVIDER", "mock").strip().lower() or "mock"
+        if not public_demo and provider_raw not in VALID_PROVIDERS:
+            raise ValueError(f"LLM_PROVIDER must be one of {VALID_PROVIDERS}, got {provider_raw!r}")
+        provider = "mock" if public_demo else provider_raw
+
+        model = cls.gemini_model if public_demo else (env.get("GEMINI_MODEL", "").strip() or cls.gemini_model)
         if not _MODEL_RE.match(model):
             raise ValueError("GEMINI_MODEL contains invalid characters")
-        extra_hosts = tuple(h.strip().lower() for h in env.get("SAFEARENA_ALLOWED_HOSTS", "").split(",") if h.strip())
-        data_dir = Path(env.get("SAFEARENA_DATA_DIR", "").strip() or (BASE_DIR / "data"))
+
+        hosts_raw = env.get("SAFEARENA_ALLOWED_HOSTS", "").strip()
+        if public_demo and not hosts_raw:
+            # Render supplies this exact hostname for each web service.
+            hosts_raw = env.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+        extra_hosts = tuple(h.strip().lower() for h in hosts_raw.split(",") if h.strip())
+        if public_demo:
+            if not extra_hosts:
+                raise ValueError(
+                    "Set SAFEARENA_ALLOWED_HOSTS to the exact public hostname, "
+                    "or deploy on Render where RENDER_EXTERNAL_HOSTNAME is supplied"
+                )
+            if any(host == "*" or not _HOST_RE.fullmatch(host) for host in extra_hosts):
+                raise ValueError("Public demo hosts must be exact hostnames without schemes, ports, paths, or wildcards")
+
+        bind_host = env.get("BIND_HOST", "0.0.0.0" if public_demo else "127.0.0.1").strip()
+        bind_host = bind_host or ("0.0.0.0" if public_demo else "127.0.0.1")
+        if public_demo and bind_host != "0.0.0.0":
+            raise ValueError("BIND_HOST must be 0.0.0.0 in public demo mode")
+        platform_port = _int(env, "PORT", 8000, 1, 65535)
+        bind_port = _int(env, "BIND_PORT", platform_port, 1, 65535)
+
+        data_default = Path("/tmp/safearena-data") if public_demo else (BASE_DIR / "data")
+        data_dir = Path(env.get("SAFEARENA_DATA_DIR", "").strip() or data_default)
+        gemini_key = "" if public_demo else env.get("GEMINI_API_KEY", "").strip()
+        timeout = 15 if public_demo else _int(env, "GEMINI_TIMEOUT_SECONDS", 15, 1, 120)
+        allowed_hosts = extra_hosts if public_demo else cls.allowed_hosts + extra_hosts
+
         return cls(
             mode=mode,
             data_dir=data_dir,
-            bind_host=env.get("BIND_HOST", "127.0.0.1").strip() or "127.0.0.1",
-            bind_port=_int(env, "BIND_PORT", 8000, 1, 65535),
+            bind_host=bind_host,
+            bind_port=bind_port,
             red_service_url=env.get("RED_SERVICE_URL", cls.red_service_url).rstrip("/"),
             blue_service_url=env.get("BLUE_SERVICE_URL", cls.blue_service_url).rstrip("/"),
             llm_service_url=env.get("LLM_SERVICE_URL", cls.llm_service_url).rstrip("/"),
             llm_provider=provider,
-            gemini_api_key=env.get("GEMINI_API_KEY", "").strip(),
+            gemini_api_key=gemini_key,
+            demo_username=username if public_demo else "",
+            demo_password=password if public_demo else "",
+            public_demo=public_demo,
             gemini_model=model,
-            gemini_timeout=float(_int(env, "GEMINI_TIMEOUT_SECONDS", 15, 1, 120)),
-            allowed_hosts=cls.allowed_hosts + extra_hosts,
+            gemini_timeout=float(timeout),
+            allowed_hosts=allowed_hosts,
             max_payload_chars=_int(env, "MAX_PAYLOAD_CHARS", 4000, 1, 20000),
-            rate_limit_per_minute=_int(env, "RATE_LIMIT_PER_MINUTE", 120, 1, 100000),
+            rate_limit_per_minute=_int(env, "RATE_LIMIT_PER_MINUTE", 60 if public_demo else 120, 1, 100000),
         )

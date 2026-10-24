@@ -9,6 +9,7 @@ Security notes
 from __future__ import annotations
 
 import re
+import secrets
 import threading
 import time
 from collections import deque
@@ -73,9 +74,11 @@ def create_app(config: Config | None = None, *, llm_client=None, http=None, tcp=
     sessions = SessionManager()
     gateway = Gateway(policy=policy, audit=audit, events=events, llm=llm, sessions=sessions, mode=config.mode)
     limiter = RateLimiter(config.rate_limit_per_minute)
+    auth_limiter = RateLimiter(10)
     http_for_probe = http
     app.extensions["safearena"] = SimpleNamespace(config=config, audit=audit, events=events, llm=llm, gateway=gateway,
-                                                  sessions=sessions, policy=policy, limiter=limiter)
+                                                  sessions=sessions, policy=policy, limiter=limiter,
+                                                  auth_limiter=auth_limiter)
 
     def start_session(reason: str) -> dict:
         info = sessions.start()
@@ -93,6 +96,31 @@ def create_app(config: Config | None = None, *, llm_client=None, http=None, tcp=
         host = urlsplit("//" + request.host).hostname or ""
         if host.lower() not in config.allowed_hosts:
             raise ApiError(400, "Host header not allowed")
+
+        # The platform health check is the only unauthenticated public-demo route.
+        if config.public_demo and request.path != "/api/health":
+            auth = request.authorization
+            valid = False
+            if auth is not None and auth.type.lower() == "basic":
+                username_ok = secrets.compare_digest(auth.username or "", config.demo_username)
+                password_ok = secrets.compare_digest(auth.password or "", config.demo_password)
+                valid = username_ok & password_ok
+            if not valid:
+                if not auth_limiter.allow():
+                    return jsonify({"error": "Too many failed authentication attempts; try again later"}), 429
+                response = jsonify({"error": "Authentication required"})
+                response.status_code = 401
+                response.headers["WWW-Authenticate"] = 'Basic realm="SafeArena Demo", charset="UTF-8"'
+                return response
+
+        if config.public_demo and (request.method, request.path) in {
+            ("POST", "/api/audit/tamper-test"),
+            ("POST", "/api/audit/rotate"),
+            ("GET", "/api/audit/export"),
+            ("POST", "/api/isolation/probe"),
+        }:
+            raise ApiError(403, "This operation is disabled in public demo mode")
+
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("Origin")
             if origin and urlsplit(origin).netloc.lower() != request.host.lower():
@@ -160,9 +188,11 @@ def create_app(config: Config | None = None, *, llm_client=None, http=None, tcp=
         sess = sessions.snapshot()
         docker = config.mode == "docker"
         return {
-            "version": __version__, "mode": config.mode,
-            "mode_label": "Docker (network-isolated zones)" if docker else "Local simulation (policy only)",
-            "enforcement": "policy + network segmentation" if docker else "policy enforcement only; no network isolation",
+            "version": __version__, "mode": config.mode, "public_demo": config.public_demo,
+            "mode_label": ("Public demo (local simulation)" if config.public_demo else
+                           ("Docker (network-isolated zones)" if docker else "Local simulation (policy only)")),
+            "enforcement": ("policy enforcement only; no network isolation (public demo)" if config.public_demo else
+                            ("policy + network segmentation" if docker else "policy enforcement only; no network isolation")),
             "bind": {"host": config.bind_host, "port": config.bind_port},
             **sess,
             "zones": {
