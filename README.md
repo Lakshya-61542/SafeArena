@@ -2,11 +2,13 @@
 
 **Isolate → Control → Detect → Prove**
 
-## Live demo
+## Live demos
 
-**Live Demo:** [https://safearena-public-demo-iw2g.onrender.com/](https://safearena-public-demo-iw2g.onrender.com/)
+**Render simulation demo (no real Docker network isolation):** [https://safearena-public-demo-iw2g.onrender.com/](https://safearena-public-demo-iw2g.onrender.com/)
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Lakshya-61542/SafeArena)
+**Public Docker demo:** _Pending VPS deployment._ Follow the [Docker VPS deployment guide](docs/DEPLOY_DOCKER_VPS.md) to deploy the real multi-container network topology.
+
+[![Deploy the simulation demo to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Lakshya-61542/SafeArena)
 
 SafeArena is a sandbox for testing adversarial prompts against an AI model without letting the attackers and defenders touch each other. A **Red** zone (attack) and a **Blue** zone (defense) can only reach the **Client LLM** through a **Security Gateway**. Every decision becomes a security event and a tamper-evident, SHA-256 hash-chained audit record.
 
@@ -174,6 +176,12 @@ For a manual Render service instead of the Blueprint, use:
 - Build command: `pip install -r requirements.txt`
 - Start command: `gunicorn --workers 1 --threads 4 --timeout 60 --bind 0.0.0.0:$PORT 'backend.main:build_app()'`
 - Health check path: `/api/health`
+
+### Public Docker VPS demo
+
+For the real multi-container network topology, follow [docs/DEPLOY_DOCKER_VPS.md](docs/DEPLOY_DOCKER_VPS.md). It uses a Linux VPS, the public Compose overlay, and Caddy for HTTPS. The public dashboard has no login prompt; audit rotation, tamper tests, and audit export are disabled, while the real isolation probe remains available. Only claim network isolation after the host-side isolation test reports **PASS**.
+
+The Render URL above remains a local policy simulation and is not proof of Docker network isolation.
 
 ## Known limitations
 
