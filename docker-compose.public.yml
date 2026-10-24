@@ -1,0 +1,32 @@
+# Optional public-facing layer for a Linux VPS.
+# Use together with docker-compose.yml; do not replace the base Compose file.
+services:
+  gateway:
+    environment:
+      SAFEARENA_PUBLIC_DOCKER_DEMO: "1"
+      SAFEARENA_MODE: docker
+      LLM_PROVIDER: mock
+      SAFEARENA_ALLOWED_HOSTS: ${SAFEARENA_ALLOWED_HOSTS:?Set SAFEARENA_ALLOWED_HOSTS in .env}
+      RATE_LIMIT_PER_MINUTE: "60"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SAFEARENA_DOMAIN: ${SAFEARENA_DOMAIN:?Set SAFEARENA_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [frontend]
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
