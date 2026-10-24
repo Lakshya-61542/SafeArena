@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SafeArena — Adversarial AI Testing Console</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Overview">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">SA</div>
+        <div>
+          <h1>SafeArena</h1>
+          <p>AI safety infrastructure</p>
+        </div>
+      </div>
+
+      <ol class="principles" aria-label="Isolate, Control, Detect, Prove">
+        <li><b>Isolate</b><span>Red, Blue and LLM zones</span></li>
+        <li><b>Control</b><span>Gateway allows or blocks</span></li>
+        <li><b>Detect</b><span>Violations become events</span></li>
+        <li><b>Prove</b><span>Hash-chained audit log</span></li>
+      </ol>
+
+      <div class="side-card">
+        <small>Runtime mode</small>
+        <strong id="modeBadge">Loading…</strong>
+        <span id="enforcement" class="side-sub"></span>
+      </div>
+      <div class="side-card">
+        <small>Client LLM</small>
+        <strong id="llmProvider">Loading…</strong>
+        <span id="llmTransport" class="side-sub"></span>
+      </div>
+      <p class="sidebar-note">Proof-of-concept. Bound to localhost; the API has no authentication.</p>
+    </aside>
+
+    <main id="main">
+      <header>
+        <div>
+          <p class="team">VSV The Tech Giants</p>
+          <h2>Adversarial AI Testing Console</h2>
+          <p class="muted">Separate zones. Controlled communication. Verifiable evidence.</p>
+        </div>
+        <div class="header-actions">
+          <button type="button" class="secondary" data-action="archive">Archive audit chain</button>
+          <button type="button" class="primary" data-action="session">Start fresh session</button>
+        </div>
+      </header>
+
+      <section class="summary-grid" aria-label="Summary">
+        <article class="metric">
+          <p>Session</p>
+          <strong id="sessionId">—</strong>
+          <small id="sessionStarted">&nbsp;</small>
+        </article>
+        <article class="metric">
+          <p>Blocked in this session</p>
+          <strong id="blockedCount">0</strong>
+          <small id="allowedCount">0 allowed</small>
+        </article>
+        <article class="metric">
+          <p>Audit integrity</p>
+          <strong id="auditState" class="state-wait">Checking…</strong>
+          <small id="auditCount">0 records</small>
+        </article>
+        <article class="metric">
+          <p>Isolation evidence</p>
+          <strong id="isolationState" class="state-wait">Not run</strong>
+          <small id="isolationNote">Run the probe in Docker mode</small>
+        </article>
+      </section>
+
+      <section class="panel" aria-labelledby="zonesTitle">
+        <div class="section-title">
+          <h3 id="zonesTitle">Security zones</h3>
+          <span class="pill ok" id="topologyPill">Protected topology</span>
+        </div>
+        <div class="zones">
+          <div class="zone red-zone" id="zoneRed">
+            <div class="zone-icon">R</div>
+            <div><h4>Red sandbox</h4><p>Adversarial prompts and attack tooling</p><code id="redNetwork">—</code></div>
+          </div>
+          <div class="gateway" id="gateA" aria-hidden="true"><div class="gate-line"></div><div class="gate-card"><span>Gateway</span><b id="gateAText">idle</b></div><div class="gate-line"></div></div>
+          <div class="zone llm-zone" id="zoneLlm">
+            <div class="zone-icon">AI</div>
+            <div><h4>Client LLM</h4><p>Model under evaluation</p><code id="llmNetwork">—</code></div>
+          </div>
+          <div class="gateway" id="gateB" aria-hidden="true"><div class="gate-line"></div><div class="gate-card"><span>Gateway</span><b id="gateBText">idle</b></div><div class="gate-line"></div></div>
+          <div class="zone blue-zone" id="zoneBlue">
+            <div class="zone-icon">B</div>
+            <div><h4>Blue sandbox</h4><p>Defensive logic and policies</p><code id="blueNetwork">—</code></div>
+          </div>
+        </div>
+        <div class="policy-wrap">
+          <h4>Access policy <span class="muted">(rows request access to columns; anything not listed is denied)</span></h4>
+          <table class="matrix" id="policyMatrix"><caption class="sr">Zone access policy matrix</caption></table>
+        </div>
+      </section>
+
+      <section class="two-col">
+        <article class="panel" aria-labelledby="actionsTitle">
+          <div class="section-title"><h3 id="actionsTitle">Run a test</h3></div>
+          <div class="action-stack">
+            <button type="button" data-action="scenario" data-scenario="authorized-red-llm"><span>R→L</span><div><b>Red → LLM adversarial prompt</b><small>Expected: allowed, LLM refuses, injection alert</small></div></button>
+            <button type="button" data-action="scenario" data-scenario="blue-llm"><span>B→L</span><div><b>Blue → LLM defensive query</b><small>Expected: allowed</small></div></button>
+            <button type="button" class="danger" data-action="scenario" data-scenario="red-blue"><span>R→B</span><div><b>Red → Blue access attempt</b><small>Expected: blocked, high-severity event</small></div></button>
+            <button type="button" class="danger" data-action="scenario" data-scenario="blue-red"><span>B→R</span><div><b>Blue → Red access attempt</b><small>Expected: blocked, high-severity event</small></div></button>
+            <button type="button" data-action="probe"><span>NET</span><div><b>Run network isolation probe</b><small>Docker mode: containers try to reach each other</small></div></button>
+            <button type="button" data-action="verify"><span>SHA</span><div><b>Verify audit chain</b><small>Recomputes every hash and link</small></div></button>
+            <button type="button" data-action="tamper"><span>!</span><div><b>Run tamper test</b><small>Corrupts copies of the log; live log untouched</small></div></button>
+          </div>
+
+          <form id="customForm" class="custom" autocomplete="off">
+            <h4>Custom gateway request</h4>
+            <div class="row">
+              <label>From
+                <select id="cSource"><option value="red">Red</option><option value="blue">Blue</option><option value="llm">LLM</option></select>
+              </label>
+              <label>To
+                <select id="cTarget"><option value="llm">LLM</option><option value="blue">Blue</option><option value="red">Red</option></select>
+              </label>
+            </div>
+            <label>Prompt or payload
+              <textarea id="cPayload" rows="3" maxlength="4000" placeholder="Type a test prompt…"></textarea>
+            </label>
+            <button type="submit" class="primary">Send through gateway</button>
+          </form>
+
+          <div id="resultBox" class="result-box empty" role="status" aria-live="polite">Run a test to see the gateway decision here.</div>
+        </article>
+
+        <article class="panel" aria-labelledby="eventsTitle">
+          <div class="section-title">
+            <h3 id="eventsTitle">Security events</h3>
+            <label class="live"><input type="checkbox" id="liveToggle" checked> <span id="liveDot" class="live-dot">Live</span></label>
+          </div>
+          <div class="filters" role="search" aria-label="Filter security events">
+            <label>Severity
+              <select id="fSeverity"><option value="">All</option><option>info</option><option>medium</option><option>high</option><option>critical</option></select>
+            </label>
+            <label>Decision
+              <select id="fDecision"><option value="">All</option><option>ALLOWED</option><option>BLOCKED</option></select>
+            </label>
+            <label>From
+              <select id="fSource"><option value="">Any</option><option>red</option><option>blue</option><option>llm</option></select>
+            </label>
+            <label>To
+              <select id="fTarget"><option value="">Any</option><option>red</option><option>blue</option><option>llm</option></select>
+            </label>
+            <label>Type
+              <select id="fType"><option value="">All types</option></select>
+            </label>
+            <label>Scope
+              <select id="fScope"><option value="session">This session</option><option value="all">All sessions</option></select>
+            </label>
+            <label class="wide">Search
+              <input id="fQuery" type="search" placeholder="message, type, details…" maxlength="200">
+            </label>
+            <button type="button" class="small-btn" data-action="clear-filters">Clear filters</button>
+          </div>
+          <p class="muted count-line" id="eventCountLine">&nbsp;</p>
+          <div id="events" class="event-list"></div>
+        </article>
+      </section>
+
+      <section class="panel" aria-labelledby="auditTitle">
+        <div class="section-title">
+          <h3 id="auditTitle">Tamper-evident audit trail</h3>
+          <div class="inline-actions">
+            <a class="btn-link" href="/api/audit/export" download>Export log</a>
+            <button type="button" class="small-btn" data-action="refresh">Refresh</button>
+          </div>
+        </div>
+        <p class="muted" id="auditHead">&nbsp;</p>
+        <div id="audit" class="audit-table"></div>
+      </section>
+
+      <footer>SafeArena MVP · VSV The Tech Giants · Hack in Hills '26</footer>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

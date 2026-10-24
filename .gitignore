@@ -1,0 +1,11 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+node_modules/
+data/*
+!data/.gitkeep
+reports/
+*.zip
+!SafeArena_Hackathon_Pitch_Deck_Package.zip

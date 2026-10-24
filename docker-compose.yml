@@ -1,0 +1,81 @@
+# SafeArena: Isolate -> Control -> Detect -> Prove
+#
+#   red-service  --red_net--\
+#                            gateway --llm_net-- llm-service
+#   blue-service --blue_net-/        \--frontend-- host 127.0.0.1:8000
+#
+# red_net, blue_net and llm_net are `internal: true`: no route to the internet and no route to each other.
+# Only the gateway is attached to all of them, so every cross-zone request must pass through it.
+name: safearena
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs: ["/tmp"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 128
+  mem_limit: 256m
+  restart: unless-stopped
+
+services:
+  gateway:
+    <<: *hardening
+    build: { context: ., dockerfile: Dockerfile.gateway }
+    environment:
+      SAFEARENA_MODE: docker
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+    ports:
+      - "127.0.0.1:8000:8000"          # published to the host's loopback ONLY
+    volumes:
+      - safearena_data:/app/data       # audit log + events survive restarts
+    networks: [frontend, red_net, blue_net, llm_net]
+    depends_on:
+      red-service: { condition: service_healthy }
+      blue-service: { condition: service_healthy }
+      llm-service: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+
+  red-service:
+    <<: *hardening
+    build: { context: ., dockerfile: Dockerfile.red }
+    networks: [red_net]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8101/health', timeout=3)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+
+  blue-service:
+    <<: *hardening
+    build: { context: ., dockerfile: Dockerfile.blue }
+    networks: [blue_net]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8102/health', timeout=3)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+
+  llm-service:
+    <<: *hardening
+    build: { context: ., dockerfile: Dockerfile.llm }
+    networks: [llm_net]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8103/health', timeout=3)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+
+networks:
+  frontend: {}                 # gateway <-> host port mapping and optional Gemini egress
+  red_net: { internal: true }
+  blue_net: { internal: true }
+  llm_net: { internal: true }
+
+volumes:
+  safearena_data: {}
