@@ -54,6 +54,39 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(c.allowed_hosts, ("demo.onrender.com",))
         self.assertNotIn("REAL_SECRET", repr(c))
 
+    def test_public_docker_demo_forces_docker_mock_and_requires_exact_host(self):
+        with self.assertRaises(ValueError):
+            Config.from_env({"SAFEARENA_PUBLIC_DOCKER_DEMO": "1"})
+
+        c = Config.from_env({
+            "SAFEARENA_PUBLIC_DOCKER_DEMO": "1",
+            "SAFEARENA_ALLOWED_HOSTS": "docker.example",
+            "SAFEARENA_MODE": "local",
+            "LLM_PROVIDER": "gemini",
+            "GEMINI_API_KEY": "REAL_SECRET",
+            "BIND_HOST": "0.0.0.0",
+        })
+        self.assertFalse(c.public_demo)
+        self.assertTrue(c.public_docker_demo)
+        self.assertEqual(c.mode, "docker")
+        self.assertEqual(c.llm_provider, "mock")
+        self.assertEqual(c.gemini_api_key, "")
+        self.assertEqual(c.bind_host, "0.0.0.0")
+        self.assertIn("docker.example", c.allowed_hosts)
+        self.assertNotIn("REAL_SECRET", repr(c))
+
+        with self.assertRaises(ValueError):
+            Config.from_env({
+                "SAFEARENA_PUBLIC_DOCKER_DEMO": "1",
+                "SAFEARENA_ALLOWED_HOSTS": "*",
+            })
+        with self.assertRaises(ValueError):
+            Config.from_env({
+                "SAFEARENA_PUBLIC_DEMO": "1",
+                "SAFEARENA_PUBLIC_DOCKER_DEMO": "1",
+                "SAFEARENA_ALLOWED_HOSTS": "docker.example",
+            })
+
     def test_bind_guard(self):
         validate_bind(Config(bind_host="127.0.0.1"), {}); validate_bind(Config(bind_host="localhost"), {})
         with self.assertRaises(SystemExit): validate_bind(Config(bind_host="0.0.0.0"), {})
