@@ -8,4 +8,9 @@ data/*
 !data/.gitkeep
 reports/
 *.zip
-!SafeArena_Hackathon_Pitch_Deck_Package.zip
+.env.*
+!.env.example
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

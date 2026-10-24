@@ -11,18 +11,6 @@ SafeArena is a sandbox for testing adversarial prompts against an AI model witho
 | **Detect** | Blocked access and suspicious prompts raise severity-rated events (filterable, persisted) |
 | **Prove** | Every decision is appended to a hash-chained audit log that can be verified and exported |
 
----
-
-## 🏆 Hackathon Pitch Deck & Presentation Suite
-
-- **Master Pitch Deck (Editable PPTX):** [`SafeArena_Premium_Pitch_Deck.pptx`](SafeArena_Premium_Pitch_Deck.pptx) *(12 widescreen 16:9 slides with native shapes & embedded presenter notes)*
-- **Slide Preview (PDF):** [`SafeArena_Premium_Pitch_Deck.pdf`](SafeArena_Premium_Pitch_Deck.pdf) *(High-resolution vector slide export)*
-- **Presenter Script & Defense Guide:** [`SafeArena_Presenter_Script.docx`](SafeArena_Presenter_Script.docx) & [`SafeArena_Presenter_Script.pdf`](SafeArena_Presenter_Script.pdf) *(Word-for-word pitch script, timing marks, and 5 judge Q&A defenses)*
-- **Complete Distribution Bundle (ZIP):** [`SafeArena_Hackathon_Pitch_Deck_Package.zip`](SafeArena_Hackathon_Pitch_Deck_Package.zip)
-- **Interactive UI Preview:** See [`safearena_dashboard.png`](safearena_dashboard.png) and [`slides_preview/`](slides_preview/) for all rendered slide graphics.
-
----
-
 ## Default security policy
 
 | From \ To | Red | Blue | LLM |
