@@ -63,6 +63,7 @@ class Config:
     llm_provider: str = "mock"
     gemini_api_key: str = field(default="", repr=False)
     public_demo: bool = False
+    public_docker_demo: bool = False
     gemini_model: str = "gemini-2.5-flash"
     gemini_timeout: float = 15.0
     allowed_hosts: tuple = ("localhost", "127.0.0.1", "::1")
@@ -82,21 +83,28 @@ class Config:
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "Config":
         env = os.environ if environ is None else environ
         public_raw = env.get("SAFEARENA_PUBLIC_DEMO", "0").strip()
+        public_docker_raw = env.get("SAFEARENA_PUBLIC_DOCKER_DEMO", "0").strip()
         if public_raw not in ("0", "1"):
             raise ValueError("SAFEARENA_PUBLIC_DEMO must be 0 or 1")
+        if public_docker_raw not in ("0", "1"):
+            raise ValueError("SAFEARENA_PUBLIC_DOCKER_DEMO must be 0 or 1")
         public_demo = public_raw == "1"
+        public_docker_demo = public_docker_raw == "1"
+        if public_demo and public_docker_demo:
+            raise ValueError("SAFEARENA_PUBLIC_DEMO and SAFEARENA_PUBLIC_DOCKER_DEMO cannot both be enabled")
 
+        public_mode = public_demo or public_docker_demo
         mode_raw = env.get("SAFEARENA_MODE", "local").strip().lower() or "local"
-        if not public_demo and mode_raw not in VALID_MODES:
+        if mode_raw not in VALID_MODES:
             raise ValueError(f"SAFEARENA_MODE must be one of {VALID_MODES}, got {mode_raw!r}")
-        mode = "local" if public_demo else mode_raw
+        mode = "local" if public_demo else ("docker" if public_docker_demo else mode_raw)
 
         provider_raw = env.get("LLM_PROVIDER", "mock").strip().lower() or "mock"
-        if not public_demo and provider_raw not in VALID_PROVIDERS:
+        if not public_mode and provider_raw not in VALID_PROVIDERS:
             raise ValueError(f"LLM_PROVIDER must be one of {VALID_PROVIDERS}, got {provider_raw!r}")
-        provider = "mock" if public_demo else provider_raw
+        provider = "mock" if public_mode else provider_raw
 
-        model = cls.gemini_model if public_demo else (env.get("GEMINI_MODEL", "").strip() or cls.gemini_model)
+        model = cls.gemini_model if public_mode else (env.get("GEMINI_MODEL", "").strip() or cls.gemini_model)
         if not _MODEL_RE.match(model):
             raise ValueError("GEMINI_MODEL contains invalid characters")
 
@@ -105,26 +113,28 @@ class Config:
             # Render supplies this exact hostname for each web service.
             hosts_raw = env.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
         extra_hosts = tuple(h.strip().lower() for h in hosts_raw.split(",") if h.strip())
-        if public_demo:
+        if public_mode:
             if not extra_hosts:
-                raise ValueError(
-                    "Set SAFEARENA_ALLOWED_HOSTS to the exact public hostname, "
-                    "or deploy on Render where RENDER_EXTERNAL_HOSTNAME is supplied"
-                )
+                if public_demo:
+                    raise ValueError(
+                        "Set SAFEARENA_ALLOWED_HOSTS to the exact public hostname, "
+                        "or deploy on Render where RENDER_EXTERNAL_HOSTNAME is supplied"
+                    )
+                raise ValueError("Set SAFEARENA_ALLOWED_HOSTS to the exact public Docker demo hostname")
             if any(host == "*" or not _HOST_RE.fullmatch(host) for host in extra_hosts):
                 raise ValueError("Public demo hosts must be exact hostnames without schemes, ports, paths, or wildcards")
 
-        bind_host = env.get("BIND_HOST", "0.0.0.0" if public_demo else "127.0.0.1").strip()
-        bind_host = bind_host or ("0.0.0.0" if public_demo else "127.0.0.1")
-        if public_demo and bind_host != "0.0.0.0":
+        bind_host = env.get("BIND_HOST", "0.0.0.0" if public_mode else "127.0.0.1").strip()
+        bind_host = bind_host or ("0.0.0.0" if public_mode else "127.0.0.1")
+        if public_mode and bind_host != "0.0.0.0":
             raise ValueError("BIND_HOST must be 0.0.0.0 in public demo mode")
         platform_port = _int(env, "PORT", 8000, 1, 65535)
         bind_port = _int(env, "BIND_PORT", platform_port, 1, 65535)
 
         data_default = Path("/tmp/safearena-data") if public_demo else (BASE_DIR / "data")
         data_dir = Path(env.get("SAFEARENA_DATA_DIR", "").strip() or data_default)
-        gemini_key = "" if public_demo else env.get("GEMINI_API_KEY", "").strip()
-        timeout = 15 if public_demo else _int(env, "GEMINI_TIMEOUT_SECONDS", 15, 1, 120)
+        gemini_key = "" if public_mode else env.get("GEMINI_API_KEY", "").strip()
+        timeout = 15 if public_mode else _int(env, "GEMINI_TIMEOUT_SECONDS", 15, 1, 120)
         allowed_hosts = extra_hosts if public_demo else cls.allowed_hosts + extra_hosts
 
         return cls(
@@ -138,9 +148,10 @@ class Config:
             llm_provider=provider,
             gemini_api_key=gemini_key,
             public_demo=public_demo,
+            public_docker_demo=public_docker_demo,
             gemini_model=model,
             gemini_timeout=float(timeout),
             allowed_hosts=allowed_hosts,
             max_payload_chars=_int(env, "MAX_PAYLOAD_CHARS", 4000, 1, 20000),
-            rate_limit_per_minute=_int(env, "RATE_LIMIT_PER_MINUTE", 60 if public_demo else 120, 1, 100000),
+            rate_limit_per_minute=_int(env, "RATE_LIMIT_PER_MINUTE", 60 if public_mode else 120, 1, 100000),
         )
