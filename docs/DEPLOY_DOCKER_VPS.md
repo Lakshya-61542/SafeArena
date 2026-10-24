@@ -15,7 +15,7 @@ Caddy obtains and renews HTTPS certificates automatically. The domain must resol
 
 1. Create an Ubuntu 24.04 VPS with a public IPv4 address.
 2. Add an A record for your chosen subdomain pointing to the VPS IP. If using DuckDNS, create the subdomain and set its current IP in the DuckDNS dashboard.
-3. Configure the VPS provider firewall to allow SSH, HTTP (80), and HTTPS (443). Keep all SafeArena container ports private.
+3. Configure the VPS provider firewall to allow SSH, HTTP (80), and HTTPS (443). Keep all SafeArena container ports private. Prefer the provider firewall/security group; Docker-published ports can bypass UFW rules, so do not rely on UFW alone ([Docker firewall notes](https://docs.docker.com/engine/install/ubuntu/)).
 
 ## 2. Install Docker Engine and Compose
 
