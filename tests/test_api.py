@@ -1,5 +1,6 @@
 import json
 import unittest
+from unittest.mock import patch
 
 from tests.helpers import AppTestCase
 
@@ -205,6 +206,39 @@ class PublicDemoApiTests(AppTestCase):
         for response in checks:
             self.assertEqual(response.status_code, 403)
         self.assertEqual(self.ctx.audit.verify()["count"], before)
+
+
+class PublicDockerDemoApiTests(AppTestCase):
+    config_overrides = {
+        "mode": "docker",
+        "public_docker_demo": True,
+        "allowed_hosts": ("demo.example", "localhost", "127.0.0.1", "::1"),
+        "llm_provider": "mock",
+    }
+
+    def _get(self, path):
+        return self.client.get(path, headers={"Host": "demo.example"})
+
+    def _post(self, path, body=None):
+        return self.client.post(path, json=body or {}, headers={"Host": "demo.example"})
+
+    def test_dashboard_reports_public_docker_mode(self):
+        self.assertEqual(self._get("/").status_code, 200)
+        status = self._get("/api/status").get_json()
+        self.assertTrue(status["public_demo"])
+        self.assertTrue(status["public_docker_demo"])
+        self.assertEqual(status["mode"], "docker")
+        self.assertIn("Docker network segmentation", status["enforcement"])
+
+    def test_sensitive_operations_are_disabled_but_probe_remains_available(self):
+        self.assertEqual(self._post("/api/audit/tamper-test").status_code, 403)
+        self.assertEqual(self._post("/api/audit/rotate", {"confirm": True}).status_code, 403)
+        self.assertEqual(self._get("/api/audit/export").status_code, 403)
+        fake_result = {"supported": True, "mode": "docker", "verdict": "ISOLATED", "checks": []}
+        with patch("backend.app.run_probe", return_value=fake_result):
+            response = self._post("/api/isolation/probe")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["verdict"], "ISOLATED")
 
 
 if __name__ == "__main__":
