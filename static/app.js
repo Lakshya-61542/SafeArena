@@ -129,7 +129,7 @@ function flashGateway(source, target, decision) {
 function renderStatus(s) {
   const publicDemo = !!s.public_demo;
   $("securityNote").textContent = publicDemo
-    ? "Password-protected public demo. Local simulation only; no network isolation."
+    ? "Open public demo: anyone with the link can access it. Local simulation only; no network isolation."
     : "Local prototype. Keep bound to localhost; no authentication in local mode.";
   document.querySelectorAll('[data-action="archive"], [data-action="probe"], [data-action="tamper"], a[href="/api/audit/export"]')
     .forEach((node) => { node.hidden = publicDemo; });
