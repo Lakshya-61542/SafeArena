@@ -4,7 +4,7 @@
 
 ## Live demo
 
-**Live URL:** _Pending the first Render deployment._
+**Live Demo:** [https://safearena-public-demo-iw2g.onrender.com/](https://safearena-public-demo-iw2g.onrender.com/)
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Lakshya-61542/SafeArena)
 
