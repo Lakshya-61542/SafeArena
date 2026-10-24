@@ -4,7 +4,7 @@
 
 ## Live demos
 
-**Render simulation demo (no real Docker network isolation):** [https://safearena-public-demo-iw2g.onrender.com/](https://safearena-public-demo-iw2g.onrender.com/)
+**Render simulation demo (no real Docker network isolation):** https://safearena-public-demo-qr3b.onrender.com/
 
 **Public Docker demo:** _Pending VPS deployment._ Follow the [Docker VPS deployment guide](docs/DEPLOY_DOCKER_VPS.md) to deploy the real multi-container network topology.
 
