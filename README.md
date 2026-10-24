@@ -145,16 +145,44 @@ The **tamper test** button corrupts *copies* of the log in a temp directory (edi
 
 Bound to `127.0.0.1` (non-loopback refused unless explicitly overridden; Docker publishes to host loopback only) · Host-header allow-list (DNS-rebinding) · same-origin check on all POSTs + JSON content-type · input validation and size limits · POST rate limit · strict CSP, no inline scripts, DOM built with `textContent` (prompts can't inject HTML) · parameterised SQL · no secrets in responses/logs · containers: non-root, read-only filesystem, all capabilities dropped, `no-new-privileges`, internal networks.
 
+## Public demo deployment (Render)
+
+The opt-in public demo is for a controlled hackathon presentation, not a production security service. It runs **local policy simulation only**: it does not provide Docker network isolation and must not be presented as proof of real network isolation.
+
+### Render setup
+
+A `render.yaml` Blueprint is included. In Render, create a Blueprint from this repository and set the two prompted secrets before exposing the service:
+
+- `SAFEARENA_DEMO_USERNAME`: a demo login name.
+- `SAFEARENA_DEMO_PASSWORD`: a unique random password of at least 16 characters. Do not reuse a personal password.
+
+The Blueprint enables `SAFEARENA_PUBLIC_DEMO=1`, uses Gunicorn, binds to `0.0.0.0`, uses the platform-provided port, and configures `/api/health` as the health check. The app allows only the exact hostname in `SAFEARENA_ALLOWED_HOSTS`; if that variable is not set on Render, it uses Render's exact `RENDER_EXTERNAL_HOSTNAME`. For a custom domain, set `SAFEARENA_ALLOWED_HOSTS` to the exact hostname(s), comma-separated, without `https://`, ports, paths, or wildcards.
+
+### Public demo protections
+
+- The browser prompts for HTTP Basic Authentication. `/api/health` is the only unauthenticated route; the dashboard, static assets, audit data, and API require credentials.
+- Public mode forces `SAFEARENA_MODE=local` and `LLM_PROVIDER=mock`; no Gemini key or Docker services are needed.
+- Audit rotation, audit tamper testing, audit export, and network-isolation probes are disabled in public mode at the API layer, and their dashboard controls are hidden.
+- Authentication failures are rate-limited. Use HTTPS only; Render provides HTTPS for its public service URL.
+- Demo event and audit files are stored under `/tmp/safearena-data` by default in public mode. This storage is ephemeral and is not a durable evidence archive; a restart or redeploy may reset it.
+- `GET /api/health` is intended only for the hosting platform's health check. Do not add any other unauthenticated routes.
+
+For a manual Render service instead of the Blueprint, use:
+
+- Build command: `pip install -r requirements.txt`
+- Start command: `gunicorn --workers 1 --threads 4 --timeout 60 --bind 0.0.0.0:$PORT 'backend.main:build_app()'`
+- Health check path: `/api/health`
+
 ## Known limitations
 
-- **No authentication.** Anyone who can reach the port can use the API. It is localhost-only by design; do not expose it.
+- Local mode has no authentication and is localhost-only. The opt-in public demo requires HTTP Basic Authentication and disables audit rotation, tamper tests, exports, and network probes; expose it only through HTTPS.
 - **Zone identity is asserted by the caller.** In this prototype the `source` field is trusted (the dashboard "acts as" a zone). Network segmentation (Docker mode) is the real boundary; production would need per-zone credentials (mTLS or signed tokens).
 - **Local mode is a simulation** of isolation (policy only).
 - **Audit chain limits:** an attacker who can rewrite *both* the log and its checkpoint file consistently is not detected. Production needs an external anchor (HMAC key kept elsewhere, WORM storage, or publishing the head hash).
 - **Prompt-injection detection is heuristic** (regex + the model's own refusals); it is an alert, not a guarantee.
 - The Docker probe relies on the zone containers reporting honestly; the host-side script runs probes via `docker exec` instead.
 - **Gemini integration** is covered by mocked-HTTP tests only; it has not been run against the live API in the build environment (no key/network). Model names change; set `GEMINI_MODEL` as needed.
-- Flask's built-in server is used (fine for a localhost prototype, not for production); events DB and audit log are single-node files.
+- The local prototype uses Flask's built-in server. The public Render demo uses Gunicorn, but its events DB and audit log are still single-node ephemeral files and are not durable evidence storage.
 - Windows `.bat` scripts and Docker mode could not be executed in the environment where this was built — see `docs/TEST_RESULTS.md`.
 
 ## Backend framework note
