@@ -94,14 +94,19 @@ def create_app(config: Config | None = None, *, llm_client=None, http=None, tcp=
         if host.lower() not in config.allowed_hosts:
             raise ApiError(400, "Host header not allowed")
 
-        # Public demo is intentionally open for judges; risky operations remain disabled below.
-        if config.public_demo and (request.method, request.path) in {
-            ("POST", "/api/audit/tamper-test"),
-            ("POST", "/api/audit/rotate"),
-            ("GET", "/api/audit/export"),
-            ("POST", "/api/isolation/probe"),
-        }:
-            raise ApiError(403, "This operation is disabled in public demo mode")
+        # Public demos are open to judges, but destructive or sensitive operations stay disabled.
+        if config.public_demo or config.public_docker_demo:
+            disabled = {
+                ("POST", "/api/audit/tamper-test"),
+                ("POST", "/api/audit/rotate"),
+                ("GET", "/api/audit/export"),
+            }
+            # Local Render demo has no Docker networks to test; the public Docker demo keeps
+            # the live isolation probe available so judges can verify the real container setup.
+            if config.public_demo:
+                disabled.add(("POST", "/api/isolation/probe"))
+            if (request.method, request.path) in disabled:
+                raise ApiError(403, "This operation is disabled in public demo mode")
 
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("Origin")
@@ -170,11 +175,15 @@ def create_app(config: Config | None = None, *, llm_client=None, http=None, tcp=
         sess = sessions.snapshot()
         docker = config.mode == "docker"
         return {
-            "version": __version__, "mode": config.mode, "public_demo": config.public_demo,
+            "version": __version__, "mode": config.mode,
+            "public_demo": config.public_demo or config.public_docker_demo,
+            "public_docker_demo": config.public_docker_demo,
             "mode_label": ("Public demo (local simulation)" if config.public_demo else
-                           ("Docker (network-isolated zones)" if docker else "Local simulation (policy only)")),
+                           ("Public demo (Docker mode)" if config.public_docker_demo else
+                            ("Docker (network-isolated zones)" if docker else "Local simulation (policy only)"))),
             "enforcement": ("policy enforcement only; no network isolation (public demo)" if config.public_demo else
-                            ("policy + network segmentation" if docker else "policy enforcement only; no network isolation")),
+                            ("policy + Docker network segmentation; verify with isolation probe" if config.public_docker_demo else
+                             ("policy + network segmentation" if docker else "policy enforcement only; no network isolation"))),
             "bind": {"host": config.bind_host, "port": config.bind_port},
             **sess,
             "zones": {

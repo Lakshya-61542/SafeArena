@@ -128,11 +128,16 @@ function flashGateway(source, target, decision) {
 /* ---------------------------------------------------------------- renderers */
 function renderStatus(s) {
   const publicDemo = !!s.public_demo;
-  $("securityNote").textContent = publicDemo
-    ? "Open public demo: anyone with the link can access it. Local simulation only; no network isolation."
-    : "Local prototype. Keep bound to localhost; no authentication in local mode.";
-  document.querySelectorAll('[data-action="archive"], [data-action="probe"], [data-action="tamper"], a[href="/api/audit/export"]')
+  const publicDockerDemo = !!s.public_docker_demo;
+  $("securityNote").textContent = publicDockerDemo
+    ? "Open public Docker demo: anyone with the link can access it. Mock LLM is enabled; run the isolation probe to check actual network boundaries."
+    : publicDemo
+      ? "Open public demo: anyone with the link can access it. Local simulation only; no network isolation."
+      : "Local prototype. Keep bound to localhost; no authentication in local mode.";
+  document.querySelectorAll('[data-action="archive"], [data-action="tamper"], a[href="/api/audit/export"]')
     .forEach((node) => { node.hidden = publicDemo; });
+  document.querySelectorAll('[data-action="probe"]')
+    .forEach((node) => { node.hidden = publicDemo && !publicDockerDemo; });
   $("modeBadge").textContent = s.mode_label;
   $("enforcement").textContent = s.enforcement;
   $("llmProvider").textContent = `${s.llm.provider}${s.llm.provider === "mock" ? " (offline mock)" : ""}`;

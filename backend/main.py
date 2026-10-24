@@ -9,8 +9,8 @@ from backend.config import BASE_DIR, LOOPBACK_HOSTS, Config, load_dotenv
 
 
 def validate_bind(config: Config, environ=os.environ) -> None:
-    if config.public_demo:
-        # Config.from_env has already required credentials and a strict host allow-list.
+    if config.public_demo or config.public_docker_demo:
+        # Public modes require an exact host allow-list and a non-loopback bind.
         if config.bind_host != "0.0.0.0":
             raise SystemExit("Public demo mode must bind to 0.0.0.0")
         return
